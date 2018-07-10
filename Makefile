@@ -7,8 +7,8 @@ OPENSSL_DIR=/usr/local/opt/openssl
 DDR_DIR= $(HOME)/Dev/ddr
 
 # PX STREAM SERVER
-INC_S= -I${NETSOCKET_DIR}/include -I$(OPENSSL_DIR)/include -I$(DDR_DIR)/include
-LIB_S= -L${NETSOCKET_DIR}/lib -L$(OPENSSL_DIR)/lib -L$(DDR_DIR)/lib -lnetsocket -lddr -lssl -lcrypto
+INC_S= -I${NETSOCKET_DIR}/include -I$(OPENSSL_DIR)/include -I./include
+LIB_S= -L${NETSOCKET_DIR}/lib -lnetsocket -lssl -lcrypto
 SRCDIR_S= src/server
 OBJDIR_S= obj/server
 OBJS_S= $(addprefix $(OBJDIR_S)/, pxserver.o)
@@ -16,7 +16,7 @@ EXEC_S= $(addprefix $(BINDIR)/, pxserver)
 
 # PX STREAM CLIENT
 INC_C= -I${NETSOCKET_DIR}/include -I$(OPENSSL_DIR)/include -I$(DDR_DIR)/include
-LIB_C= -L${NETSOCKET_DIR}/lib -L$(OPENSSL_DIR)/lib -L$(DDR_DIR)/lib -lnetsocket -lddr -lssl -lcrypto -lglfw -lglad
+LIB_C= -L${NETSOCKET_DIR}/lib -L$(DDR_DIR)/lib -lnetsocket -lddr -lssl -lcrypto -lglfw -lglad
 SRCDIR_C= src/client
 OBJDIR_C= obj/client
 OBJS_C= $(addprefix $(OBJDIR_C)/, pxclient.o)
