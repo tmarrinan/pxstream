@@ -220,6 +220,35 @@ void PxStream::Server::Finalize()
     {
         c.second.client->Send(&finished_flag, 1, NetSocket::CopyMode::MemCopy);
     }
+
+    uint32_t ready_count = 0;
+    std::string event_client_id;
+    while (ready_count < _connections.size())
+    {
+        NetSocket::Server::Event event = _server->WaitForNextEvent();
+        if (event.type != NetSocket::Server::EventType::None)
+        {
+            event_client_id = event.client->Endpoint();
+        }
+        if (!HandleNewConnection(event))
+        {
+            switch (event.type)
+            {
+                case NetSocket::Server::EventType::ReceiveBinary:
+                    if (_connections[event_client_id].state == ClientState::Streaming
+                        && event.data_length == 1
+                        && reinterpret_cast<uint8_t*>(event.binary_data)[0] == 255)
+                    {
+                        ready_count++;
+                    }
+                    delete[] event.binary_data;
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+    MPI_Barrier(_comm);
 }
 
 // Private

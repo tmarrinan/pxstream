@@ -53,11 +53,12 @@ int main(int argc, char **argv)
     if (rank == 0)
     {
         double elapsed = (double)(end - start) / 1000.0;
-        uint64_t overall_data = 7680LL * 2160LL * 4LL * 8LL * 26LL;
+        uint64_t overall_data = global_width * global_height * 4LL * 8LL * 26LL;
         double speed = (double)overall_data / elapsed;
         printf("finished - received %d frames in %.3lf secs (%.3lf Mbps)\n", num_frames, (double)(end - start) / 1000.0, speed / (1024.0 * 1024.0));
     }
 
+    /*
     char filename[64];
     int i = 26, j;
     //for (i = 0; i < 26; i++)
@@ -72,6 +73,7 @@ int main(int argc, char **argv)
         }
         fclose(fp);
     //}
+    */
 
     MPI_Finalize();
     

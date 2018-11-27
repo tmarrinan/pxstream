@@ -1,7 +1,8 @@
 #include "pxstream/client.h"
 
 PxStream::Client::Client(const char *host, uint16_t port, MPI_Comm comm) :
-    _finished(0)
+    _finished(0),
+    _front_buffer(0)
 {
     MPI_Comm_dup(comm, &_comm);
     int rc = MPI_Comm_rank(_comm, &_rank);
@@ -132,6 +133,8 @@ PxStream::Client::Client(const char *host, uint16_t port, MPI_Comm comm) :
     }
 
     // Create threads for handling reads
+    _begin_read = new uint8_t[_connections.size()];
+    memset(_begin_read, 0, _connections.size());
     _read_threads = new std::thread[_connections.size()];
     for (i = 0; i < _connections.size(); i++)
     {
@@ -169,13 +172,21 @@ PxStream::Client::Client(const char *host, uint16_t port, MPI_Comm comm) :
         delete[] event.binary_data;
         printf("PxStream::Client> [rank %d] connected (%ux%u +%u+%u)\n", _rank, _connections[i].local_width, _connections[i].local_height, _connections[i].local_offset_x, _connections[i].local_offset_y);
     }
-    _connection_pixel_list = new uint8_t[total_pixel_size];
+    _connection_pixel_list[0] = new uint8_t[total_pixel_size];
+    _connection_pixel_list[1] = new uint8_t[total_pixel_size];
     uint64_t pixel_list_offset = 0;
     for (i = 0; i < num_connections; i++)
     {
-        _connections[i].pixels = (void*)(_connection_pixel_list + pixel_list_offset);
+        _connections[i].pixels = (void*)(_connection_pixel_list[_front_buffer] + pixel_list_offset);
         pixel_list_offset += _connections[i].pixel_size;
     }
+
+    // start async read of first frame
+    std::unique_lock<std::mutex> lock(_read_mutex);
+    _read_finished_count = 0;
+    memset(_begin_read, 1, _connections.size());
+    lock.unlock();
+    _read_condition.notify_all();
 }
 
 PxStream::Client::~Client()
@@ -185,15 +196,17 @@ PxStream::Client::~Client()
 
 void PxStream::Client::Read()
 {
-    _read_finished_count = 0;
-    _read_condition.notify_all();
-
     std::unique_lock<std::mutex> lock(_read_mutex);
     while (_read_finished_count < _connections.size())
     {
         _finished_condition.wait(lock);
     }
+    _read_finished_count = 0;
+    memset(_begin_read, 1, _connections.size());
     lock.unlock();
+
+    // start async read of next frame
+    _read_condition.notify_all();
 }
 
 bool PxStream::Client::ServerFinished()
@@ -268,7 +281,7 @@ DDR_DataDescriptor* PxStream::Client::CreateGlobalPixelSelection(int32_t *sizes,
 
 void PxStream::Client::FillSelection(DDR_DataDescriptor *selection, void *data)
 {
-    DDR_ReorganizeData(_num_ranks, _connection_pixel_list, data, selection);
+    DDR_ReorganizeData(_num_ranks, _connection_pixel_list[_front_buffer], data, selection);
 }
 
 
@@ -283,7 +296,11 @@ void PxStream::Client::ConnectionRead(int connection_idx)
     while (!conn_finished)
     {
         lock.lock();
-        _read_condition.wait(lock);
+        while (!_begin_read[connection_idx])
+        {
+            _read_condition.wait(lock);
+        }
+        _begin_read[connection_idx] = 0;
         lock.unlock();
 
         read_count = 0;
@@ -307,6 +324,10 @@ void PxStream::Client::ConnectionRead(int connection_idx)
                     _finished++;
                     conn_finished = true;
                     read_finished = true;
+                    _connections[connection_idx].client->Send(&frame_received_flag, 1, NetSocket::CopyMode::MemCopy);
+                }
+                else {
+                    fprintf(stderr, "PxStream::Client> Warning: received unknown buffer\n");
                 }
             }
             else {
