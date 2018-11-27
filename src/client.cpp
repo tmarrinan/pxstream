@@ -2,7 +2,7 @@
 
 PxStream::Client::Client(const char *host, uint16_t port, MPI_Comm comm) :
     _finished(0),
-    _front_buffer(0)
+    _back_buffer(0)
 {
     MPI_Comm_dup(comm, &_comm);
     int rc = MPI_Comm_rank(_comm, &_rank);
@@ -177,7 +177,7 @@ PxStream::Client::Client(const char *host, uint16_t port, MPI_Comm comm) :
     uint64_t pixel_list_offset = 0;
     for (i = 0; i < num_connections; i++)
     {
-        _connections[i].pixels = (void*)(_connection_pixel_list[_front_buffer] + pixel_list_offset);
+        _connections[i].pixels = (void*)(_connection_pixel_list[_back_buffer] + pixel_list_offset);
         pixel_list_offset += _connections[i].pixel_size;
     }
 
@@ -204,6 +204,15 @@ void PxStream::Client::Read()
     _read_finished_count = 0;
     memset(_begin_read, 1, _connections.size());
     lock.unlock();
+
+    _back_buffer = 1 - _back_buffer;
+    uint64_t pixel_list_offset = 0;
+    int i;
+    for (i = 0; i < _connections.size(); i++)
+    {
+        _connections[i].pixels = (void*)(_connection_pixel_list[_back_buffer] + pixel_list_offset);
+        pixel_list_offset += _connections[i].pixel_size;
+    }
 
     // start async read of next frame
     _read_condition.notify_all();
@@ -281,7 +290,7 @@ DDR_DataDescriptor* PxStream::Client::CreateGlobalPixelSelection(int32_t *sizes,
 
 void PxStream::Client::FillSelection(DDR_DataDescriptor *selection, void *data)
 {
-    DDR_ReorganizeData(_num_ranks, _connection_pixel_list[_front_buffer], data, selection);
+    DDR_ReorganizeData(_num_ranks, _connection_pixel_list[1 - _back_buffer], data, selection);
 }
 
 

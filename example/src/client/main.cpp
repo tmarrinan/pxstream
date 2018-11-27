@@ -55,25 +55,21 @@ int main(int argc, char **argv)
         double elapsed = (double)(end - start) / 1000.0;
         uint64_t overall_data = global_width * global_height * 4LL * 8LL * 26LL;
         double speed = (double)overall_data / elapsed;
-        printf("finished - received %d frames in %.3lf secs (%.3lf Mbps)\n", num_frames, (double)(end - start) / 1000.0, speed / (1024.0 * 1024.0));
+        printf("finished - received %d frames in %.3lf secs (%.3lf Mbps)\n", num_frames + 1, (double)(end - start) / 1000.0, speed / (1024.0 * 1024.0));
     }
 
-    /*
+    
     char filename[64];
-    int i = 26, j;
-    //for (i = 0; i < 26; i++)
-    //{
-        sprintf(filename, "pxstream_%05d_%02d.ppm", i, rank);
-        FILE *fp = fopen(filename, "wb");
-        fprintf(fp, "P6\n3840 2160\n255\n");
-        for (j = 0; j < 3840 * 2160; j++)
-        {
-            uint8_t *px = pixel_list + (i * 3840 * 2160 * 4) + j * 4;
-            fprintf(fp, "%c%c%c", px[0], px[1], px[2]);
-        }
-        fclose(fp);
-    //}
-    */
+    int i;
+    sprintf(filename, "pxstream_%02d.ppm", rank);
+    FILE *fp = fopen(filename, "wb");
+    fprintf(fp, "P6\n%d %d\n255\n", sizes[0], sizes[1]);
+    for (i = 0; i < sizes[0] * sizes[1]; i++)
+    {
+        uint8_t *px = pixel_list + (num_frames * sizes[0] * sizes[1] * 4) + i * 4;
+        fprintf(fp, "%c%c%c", px[0], px[1], px[2]);
+    }
+    fclose(fp);
 
     MPI_Finalize();
     

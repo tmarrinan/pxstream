@@ -39,7 +39,7 @@ private:
     uint8_t *_begin_read;
     uint32_t _finished;
     uint8_t *_connection_pixel_list[2];
-    uint8_t _front_buffer;
+    uint8_t _back_buffer;
 
     std::thread *_read_threads;
     std::mutex _read_mutex;
