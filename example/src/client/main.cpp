@@ -39,12 +39,18 @@ int main(int argc, char **argv)
     uint32_t img_size = sizes[0] * sizes[1] * 4;
     uint8_t *pixel_list = new uint8_t[img_size * 27];
 
+    uint64_t redist_time = 0;
+    uint64_t redist_start, redist_end;
     while (!stream.ServerFinished())
     {
         stream.Read();
+        MPI_Barrier(MPI_COMM_WORLD);
         // process data
+        redist_start = GetCurrentTime();
         stream.FillSelection(selection, pixel_list + (img_size * num_frames));
-        
+        redist_end = GetCurrentTime();
+        redist_time += redist_end - redist_start;
+
         MPI_Barrier(MPI_COMM_WORLD);
         num_frames++;
     }
@@ -56,6 +62,7 @@ int main(int argc, char **argv)
         uint64_t overall_data = global_width * global_height * 4LL * 8LL * 26LL;
         double speed = (double)overall_data / elapsed;
         printf("finished - received %d frames in %.3lf secs (%.3lf Mbps)\n", num_frames + 1, (double)(end - start) / 1000.0, speed / (1024.0 * 1024.0));
+        printf("redistribution time: %.3lf\n", (double)redist_time / 1000.0);
     }
 
     

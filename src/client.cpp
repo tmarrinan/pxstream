@@ -203,7 +203,6 @@ void PxStream::Client::Read()
     }
     _read_finished_count = 0;
     memset(_begin_read, 1, _connections.size());
-    lock.unlock();
 
     _back_buffer = 1 - _back_buffer;
     uint64_t pixel_list_offset = 0;
@@ -213,6 +212,7 @@ void PxStream::Client::Read()
         _connections[i].pixels = (void*)(_connection_pixel_list[_back_buffer] + pixel_list_offset);
         pixel_list_offset += _connections[i].pixel_size;
     }
+    lock.unlock();
 
     // start async read of next frame
     _read_condition.notify_all();
@@ -290,7 +290,58 @@ DDR_DataDescriptor* PxStream::Client::CreateGlobalPixelSelection(int32_t *sizes,
 
 void PxStream::Client::FillSelection(DDR_DataDescriptor *selection, void *data)
 {
-    DDR_ReorganizeData(_num_ranks, _connection_pixel_list[1 - _back_buffer], data, selection);
+    //DDR_ReorganizeData(_num_ranks, _connection_pixel_list[1 - _back_buffer], data, selection);
+    int i, j, idx;
+    MPI_Request *send_requests = new MPI_Request[selection->maxSendChunks * _num_ranks];
+    MPI_Request *recv_requests = new MPI_Request[selection->maxSendChunks * _num_ranks];
+    for (i = 0; i < selection->maxSendChunks; i++)
+    {
+        for (j = 0; j < _num_ranks; j++)
+        {
+            idx = i*_num_ranks + j;
+            if (selection->sendLength[idx] > 0)
+            {
+                MPI_Isend(_connection_pixel_list[1 - _back_buffer] + selection->sendOffset[idx], selection->sendLength[idx], selection->sendTypes[idx], j, i, _comm, &(send_requests[idx]));
+            }
+            if (selection->recvLength[idx] > 0)
+            {
+                MPI_Irecv(data, selection->recvLength[idx], selection->recvTypes[idx], j, i, _comm, &(recv_requests[idx]));
+            }
+        }
+    }
+
+    MPI_Status status;
+    int complete;
+    bool all_complete = false;
+    while (!all_complete)
+    {
+        all_complete = true;
+        for (i = 0; i < selection->maxSendChunks; i++)
+        {
+            for (j = 0; j < _num_ranks; j++)
+            {
+                idx = i*_num_ranks + j;
+                if (selection->sendLength[idx] > 0)
+                {
+                    //MPI_Wait(&(send_requests[idx]), &status);
+                    MPI_Test(&(send_requests[idx]), &complete, &status);
+                    if (complete == 0)
+                    {
+                        all_complete = false;
+                    }
+                }
+                if (selection->recvLength[idx] > 0)
+                {
+                    //MPI_Wait(&(recv_requests[idx]), &status);
+                    MPI_Test(&(recv_requests[idx]), &complete, &status);
+                    if (complete == 0)
+                    {
+                        all_complete = false;
+                    }
+                }
+            }
+        }
+    }
 }
 
 
