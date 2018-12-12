@@ -36,7 +36,8 @@ int main(int argc, char **argv)
     int32_t offsets[2] = {rank * sizes[0], 0};
     DDR_DataDescriptor *selection = stream.CreateGlobalPixelSelection(sizes, offsets);
 
-    uint32_t img_size = sizes[0] * sizes[1] * 4;
+    //uint32_t img_size = sizes[0] * sizes[1] * 4;
+    uint32_t img_size = sizes[0] * sizes[1] / 2;
     uint8_t *pixel_list = new uint8_t[img_size * 27];
 
     uint64_t redist_time = 0;
@@ -59,7 +60,7 @@ int main(int argc, char **argv)
     if (rank == 0)
     {
         double elapsed = (double)(end - start) / 1000.0;
-        uint64_t overall_data = global_width * global_height * 4LL * 8LL * 26LL;
+        uint64_t overall_data = global_width * global_height * 4LL * 26LL;//4LL * 8LL * 26LL;
         double speed = (double)overall_data / elapsed;
         printf("finished - received %d frames in %.3lf secs (%.3lf Mbps)\n", num_frames + 1, (double)(end - start) / 1000.0, speed / (1024.0 * 1024.0));
         printf("redistribution time: %.3lf\n", (double)redist_time / 1000.0);
@@ -68,6 +69,7 @@ int main(int argc, char **argv)
     
     char filename[64];
     int i;
+    /*
     sprintf(filename, "pxstream_%02d.ppm", rank);
     FILE *fp = fopen(filename, "wb");
     fprintf(fp, "P6\n%d %d\n255\n", sizes[0], sizes[1]);
@@ -76,6 +78,11 @@ int main(int argc, char **argv)
         uint8_t *px = pixel_list + (num_frames * sizes[0] * sizes[1] * 4) + i * 4;
         fprintf(fp, "%c%c%c", px[0], px[1], px[2]);
     }
+    fclose(fp);
+    */
+    sprintf(filename, "pxstream_%02d.dxt1", rank);
+    FILE *fp = fopen(filename, "wb");
+    fwrite(pixel_list + (num_frames * sizes[0] * sizes[1] / 2), 1, sizes[0] * sizes[1] / 2, fp);
     fclose(fp);
 
     MPI_Finalize();

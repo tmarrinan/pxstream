@@ -54,7 +54,7 @@ PxStream::Client::Client(const char *host, uint16_t port, MPI_Comm comm) :
                             {
                                 fprintf(stderr, "PxStream::Client> Warning: remote machine's endianness does not match\n");
                             }
-                            delete[] event.binary_data;
+                            delete[] reinterpret_cast<uint8_t*>(event.binary_data);
                             server_info_count++;
                             break;
                         case 1: // ip addresses
@@ -126,7 +126,7 @@ PxStream::Client::Client(const char *host, uint16_t port, MPI_Comm comm) :
             event = conn.client->WaitForNextEvent();
             if (event.type == NetSocket::Client::EventType::ReceiveBinary)
             {
-                delete[] event.binary_data;
+                delete[] reinterpret_cast<uint8_t*>(event.binary_data);
             }
         } while (event.type != NetSocket::Client::EventType::Connect);
         _connections.push_back(conn);
@@ -169,7 +169,7 @@ PxStream::Client::Client(const char *host, uint16_t port, MPI_Comm comm) :
         _connections[i].local_offset_y = header[3];
         _connections[i].pixel_size = (uint32_t)(_connections[i].local_width * _connections[i].local_height * (double)PxStream::GetBitsPerPixel(_px_format, _px_data_type) / 8.0);
         total_pixel_size += _connections[i].pixel_size;
-        delete[] event.binary_data;
+        delete[] reinterpret_cast<uint8_t*>(event.binary_data);
         printf("PxStream::Client> [rank %d] connected (%ux%u +%u+%u)\n", _rank, _connections[i].local_width, _connections[i].local_height, _connections[i].local_offset_x, _connections[i].local_offset_y);
     }
     _connection_pixel_list[0] = new uint8_t[total_pixel_size];
@@ -275,13 +275,55 @@ DDR_DataDescriptor* PxStream::Client::CreateGlobalPixelSelection(int32_t *sizes,
     int32_t bpp = PxStream::GetBitsPerPixel(_px_format, _px_data_type);
     for (i = 0; i < _connections.size(); i++)
     {
-        dims_own[i * 2 + 0] = _connections[i].local_width * bpp / 8;
-        dims_own[i * 2 + 1] = _connections[i].local_height;
-        offsets_own[i * 2 + 0] = _connections[i].local_offset_x * bpp / 8;
-        offsets_own[i * 2 + 1] = _connections[i].local_offset_y;
+        switch (_px_format)
+        {
+            case PixelFormat::RGBA:
+            case PixelFormat::RGB:
+            case PixelFormat::GrayScale:
+                dims_own[i * 2 + 0] = _connections[i].local_width * bpp / 8;
+                dims_own[i * 2 + 1] = _connections[i].local_height;
+                offsets_own[i * 2 + 0] = _connections[i].local_offset_x * bpp / 8;
+                offsets_own[i * 2 + 1] = _connections[i].local_offset_y;
+                break;
+            case PixelFormat::YUV444:
+                break;
+            case PixelFormat::YUV422:
+                break;
+            case PixelFormat::YUV420:
+                break;
+            case PixelFormat::DXT1:
+                dims_own[i * 2 + 0] = _connections[i].local_width * 2;
+                dims_own[i * 2 + 1] = _connections[i].local_height / 4;
+                offsets_own[i * 2 + 0] = _connections[i].local_offset_x * 2;
+                offsets_own[i * 2 + 1] = (_global_height - _connections[i].local_offset_y - _connections[i].local_height) / 4; //_connections[i].local_offset_y / 4;
+                break;
+        }
     }
-    int32_t px_sizes[2] = {sizes[0] * bpp / 8, sizes[1]};
-    int32_t px_offsets[2] = {offsets[0] * bpp / 8, offsets[1]};
+    int32_t px_sizes[2];
+    int32_t px_offsets[2];
+    switch (_px_format)
+    {
+        case PixelFormat::RGBA:
+        case PixelFormat::RGB:
+        case PixelFormat::GrayScale:
+            px_sizes[0] = sizes[0] * bpp / 8;
+            px_sizes[1] = sizes[1];
+            px_offsets[0] = offsets[0] * bpp / 8;
+            px_offsets[1] =  offsets[1];
+            break;
+        case PixelFormat::YUV444:
+            break;
+        case PixelFormat::YUV422:
+            break;
+        case PixelFormat::YUV420:
+            break;
+        case PixelFormat::DXT1:
+            px_sizes[0] = sizes[0] * 2;
+            px_sizes[1] = sizes[1] / 4;
+            px_offsets[0] = offsets[0] * 2;
+            px_offsets[1] =  (_global_height - offsets[1] - sizes[1]) / 4; //offsets[1] / 4; ORIGIN = BOTTOM_LEFT
+            break;
+    }
 
     DDR_SetupDataMapping(_rank, _num_ranks, chunks_own, dims_own, offsets_own, px_sizes, px_offsets, desc);
 

@@ -16,6 +16,7 @@
 namespace PxStream {
     enum PixelDataType : uint8_t {Uint8, Uint16, Uint32, Uint64, Int8, Int16, Int32, Int64, Float, Double};
     enum PixelFormat : uint8_t {RGBA, RGB, GrayScale, YUV444, YUV422, YUV420, DXT1};
+    enum PixelOrigin : uint8_t {TopLeft, BottomLeft};
     enum Endian : uint8_t {Little, Big};
 
     class Server;

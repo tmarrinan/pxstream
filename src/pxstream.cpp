@@ -48,6 +48,7 @@ uint32_t PxStream::GetBitsPerPixel(PixelFormat format, PixelDataType type)
         case PixelFormat::YUV420:
             break;
         case PixelFormat::DXT1:
+            size = GetDataTypeSize(type) * 8 / 2;
             break;
     }
     return size;

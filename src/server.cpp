@@ -129,7 +129,7 @@ void PxStream::Server::Listen(StreamBehavior behavior, uint32_t initial_wait_cou
             // unexpected event ... unless notification that a send finished
             if (event.type == NetSocket::Server::EventType::ReceiveBinary)
             {
-                delete[] event.binary_data;
+                delete[] reinterpret_cast<uint8_t*>(event.binary_data);
             }
             if (event.type != NetSocket::Server::EventType::SendFinished)
             {
@@ -203,7 +203,7 @@ void PxStream::Server::AdvanceToNextFrame()
                         {
                             ready_count++;
                         }
-                        delete[] event.binary_data;
+                        delete[] reinterpret_cast<uint8_t*>(event.binary_data);
                         break;
                     default:
                         break;
@@ -241,7 +241,7 @@ void PxStream::Server::Finalize()
                     {
                         ready_count++;
                     }
-                    delete[] event.binary_data;
+                    delete[] reinterpret_cast<uint8_t*>(event.binary_data);
                     break;
                 default:
                     break;
@@ -322,7 +322,7 @@ bool PxStream::Server::HandleNewConnection(NetSocket::Server::Event& event)
                     fprintf(stderr, "PxStream::Server> Warning: expected handshake (13 byte), received %d bytes instead\n", event.data_length);
                     // TODO: terminate connection
                 }
-                delete[] event.binary_data;
+                delete[] reinterpret_cast<uint8_t*>(event.binary_data);
                 // mark as valid event for new connection
                 new_connection_event = true;
             }

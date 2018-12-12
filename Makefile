@@ -27,17 +27,25 @@ TEST_S= $(addprefix $(BINDIR)/, pxserver)
 
 # SAMPLE IMAGE STREAM CLIENT
 TEST_INC_C= -I${NETSOCKET_DIR}/include -I$(OPENSSL_DIR)/include -I$(DDR_DIR)/include -I./include -I./example/include
-TEST_LIB_C= -L${NETSOCKET_DIR}/lib -L${DDR_DIR}/lib -L./lib -lnetsocket -ldl -lssl -lcrypto -lglfw -lglad -lpthread -lpxstream -lddr
+TEST_LIB_C= -L${NETSOCKET_DIR}/lib -L${DDR_DIR}/lib -L./lib -lnetsocket -ldl -lssl -lcrypto -lpthread -lpxstream -lddr
 TEST_SRCDIR_C= example/src/client
 TEST_OBJDIR_C= obj/client
 TEST_OBJS_C= $(addprefix $(TEST_OBJDIR_C)/, main.o)
 TEST_C= $(addprefix $(BINDIR)/, pxclient)
 
+# SAMPLE IMAGE STREAM VIS CLIENT
+TEST_INC_V= -I${NETSOCKET_DIR}/include -I$(OPENSSL_DIR)/include -I$(DDR_DIR)/include -I./include -I./example/include
+TEST_LIB_V= -L${NETSOCKET_DIR}/lib -L${DDR_DIR}/lib -L./lib -lnetsocket -ldl -lssl -lcrypto -lglfw -lglad -lpthread -lpxstream -lddr
+TEST_SRCDIR_V= example/src/vis
+TEST_OBJDIR_V= obj/vis
+TEST_OBJS_V= $(addprefix $(TEST_OBJDIR_V)/, main.o)
+TEST_V= $(addprefix $(BINDIR)/, pxvis)
+
 # CREATE DIRECTORIES (IF DON'T ALREADY EXIST)
-mkdirs:= $(shell mkdir -p $(OBJDIR) $(TEST_OBJDIR_S) $(TEST_OBJDIR_C) $(LIBDIR) $(BINDIR))
+mkdirs:= $(shell mkdir -p $(OBJDIR) $(TEST_OBJDIR_S) $(TEST_OBJDIR_C) $(TEST_OBJDIR_V) $(LIBDIR) $(BINDIR))
 
 # BUILD EVERYTHING
-all: $(HSLIB) $(TEST_S) $(TEST_C) 
+all: $(HSLIB) $(TEST_S) $(TEST_C) $(TEST_V)
 
 $(HSLIB): $(OBJS)
 	$(LIBCXX) $(LIBCXX_FLAGS) $@ $^
@@ -57,6 +65,12 @@ $(TEST_C): $(TEST_OBJS_C)
 $(TEST_OBJDIR_C)/%.o: $(TEST_SRCDIR_C)/%.cpp
 	$(MPICXX) $(MPICXX_FLAGS) -c -o $@ $< $(TEST_INC_C)
 
+$(TEST_V): $(TEST_OBJS_V)
+	$(MPICXX) $(MPICXX_FLAGS) -o $@ $^ $(TEST_LIB_V)
+
+$(TEST_OBJDIR_V)/%.o: $(TEST_SRCDIR_V)/%.cpp
+	$(MPICXX) $(MPICXX_FLAGS) -c -o $@ $< $(TEST_INC_V)
+
 # REMOVE OLD FILES
 clean:
-	rm -f $(OBJS) $(HSLIB) $(TEST_OBJS_S) $(TEST_OBJS_C) $(TEST_S) $(TEST_C)
+	rm -f $(OBJS) $(HSLIB) $(TEST_OBJS_S) $(TEST_OBJS_C) $(TEST_OBJS_V) $(TEST_S) $(TEST_C) $(TEST_V)
