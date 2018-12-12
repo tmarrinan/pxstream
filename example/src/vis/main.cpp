@@ -314,6 +314,8 @@ void GetPixelLocations(int rank, jsvar& config, uint32_t global_width, uint32_t 
 
 void Init(int rank, GLFWwindow *window, Screen &screen, int32_t *local_px_size, int32_t *local_render_size, int32_t *local_render_offset, uint8_t *texture, GShaderProgram *shader, GLuint *vao, GLuint *tex_id)
 {
+    /*
+    // print supported extensions
     GLint n = 0; 
     glGetIntegerv(GL_NUM_EXTENSIONS, &n); 
     for (GLint i = 0; i < n; i++) 
@@ -321,6 +323,7 @@ void Init(int rank, GLFWwindow *window, Screen &screen, int32_t *local_px_size, 
         const char* extension = (const char*)glGetStringi(GL_EXTENSIONS, i);
         printf("Ext %d: %s\n", i, extension);
     }
+    */
 
     int w, h;
     glClearColor(0.0, 0.0, 0.0, 1.0);
