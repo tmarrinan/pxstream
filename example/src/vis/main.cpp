@@ -1,14 +1,5 @@
 #include <iostream>
 #include <chrono>
-#ifdef _WIN32
-    #include <GL/glext.h>
-    #include <GL/wglext.h>
-#elif __APPLE__
-    #include <OpenGL/gl3ext.h>
-#else // __linux__
-    #include <GL/glext.h>
-    #include <GL/glxext.h>
-#endif
 #include <glad/glad.h>
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -18,6 +9,12 @@
 #include <mpi.h>
 #include "pxstream/client.h"
 #include "jsobject.hpp"
+
+#ifndef GL_EXT_texture_compression_dxt1
+#define GL_EXT_texture_compression_dxt1 1
+#define GL_COMPRESSED_RGB_S3TC_DXT1_EXT   0x83F0
+#define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT  0x83F1
+#endif
 
 typedef struct Screen {
     int width;
@@ -167,6 +164,7 @@ int main(int argc, char **argv)
     GLuint vao;
     GLuint tex_id;
     Init(rank, window, screen, local_px_size, local_render_size, local_render_offset, texture, &shader, &vao, &tex_id);
+    glfwPollEvents();
 
     MPI_Barrier(MPI_COMM_WORLD);
 
@@ -199,9 +197,9 @@ int main(int argc, char **argv)
                 {
                     double recent_fps = 12.0 / max_elapsed[0];
                     double recent_mbps = ((double)((uint64_t)total_size * 8ULL * 12ULL) / (1024.0 * 1024.0)) / max_elapsed[0];
-                    double overall_fps = (double)num_frames / max_elapsed[1];
+                    double overall_fps = (double)(num_frames+1) / max_elapsed[1];
                     double overall_mbps = ((double)((uint64_t)total_size * 8ULL * (uint64_t)(num_frames+1)) / (1024.0 * 1024.0)) / max_elapsed[1];
-                    printf("[PxVis] last 12 frames: %.3lf fps / %.3lf mbps, overall: %.3lf fps / %.3lf mbps\n", recent_fps, recent_mbps, overall_fps, overall_mbps);
+                    printf("[PxVis] last 12 frames: %.3lf fps / %.3lf mbps, overall (all %d frames): %.3lf fps / %.3lf mbps\n", recent_fps, recent_mbps, num_frames + 1, overall_fps, overall_mbps);
                 }
                 fps_start = GetCurrentTime();
             }
