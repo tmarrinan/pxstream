@@ -10,11 +10,16 @@
 #include "pxstream/client.h"
 #include "jsobject.hpp"
 
-#ifndef GL_EXT_texture_compression_dxt1
-#define GL_EXT_texture_compression_dxt1 1
+// from glcorearb.h
+#ifndef GL_EXT_texture_compression_s3tc
+#define GL_EXT_texture_compression_s3tc 1
 #define GL_COMPRESSED_RGB_S3TC_DXT1_EXT   0x83F0
 #define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT  0x83F1
+#define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT  0x83F2
+#define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT  0x83F3
 #endif
+
+#define STREAM_RGBA
 
 typedef struct Screen {
     int width;
@@ -60,7 +65,7 @@ int main(int argc, char **argv)
 
 
     // read config file
-    jsvar config = jsobject::parseFromFile("example/resrc/config/laptop2-cfg.json");
+    jsvar config = jsobject::parseFromFile("example/resrc/config/laptop4-cfg.json");
     if (num_ranks != config["screen"]["displays"].length())
     {
         fprintf(stderr, "Error: app configured for %d ranks\n", config["screen"]["displays"].length());
@@ -91,10 +96,15 @@ int main(int argc, char **argv)
     GetPixelLocations(rank, config, global_width, global_height, local_px_size, local_px_offset, local_render_size, local_render_offset);
     DDR_DataDescriptor *selection = stream.CreateGlobalPixelSelection(local_px_size, local_px_offset);
 
-    //uint32_t total_size = global_width * global_height * 4; // RGBA
-    //uint32_t img_size = local_px_size[0] * local_px_size[1] * 4; // RGBA
+    printf("[rank %d] %d %d, %dx%d\n", rank, local_px_offset[0], local_px_offset[1], local_px_size[0], local_px_size[1]);
+
+#ifdef STREAM_RGBA
+    uint32_t total_size = global_width * global_height * 4; // RGBA
+    uint32_t img_size = local_px_size[0] * local_px_size[1] * 4; // RGBA
+#else
     uint32_t total_size = global_width * global_height / 2; // DXT1
     uint32_t img_size = local_px_size[0] * local_px_size[1] / 2; // DXT1
+#endif
     uint8_t *texture = new uint8_t[img_size];
     memset(texture, 0, img_size);
 
@@ -182,8 +192,11 @@ int main(int argc, char **argv)
             stream.FillSelection(selection, texture);
 
             glBindTexture(GL_TEXTURE_2D, tex_id);
-            //glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, local_px_size[0], local_px_size[1], GL_RGBA, GL_UNSIGNED_BYTE, texture); // RGBA
+#ifdef STREAM_RGBA
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, local_px_size[0], local_px_size[1], GL_RGBA, GL_UNSIGNED_BYTE, texture); // RGBA
+#else
             glCompressedTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, local_px_size[0], local_px_size[1], GL_COMPRESSED_RGB_S3TC_DXT1_EXT, local_px_size[0] * local_px_size[1] / 2, texture); // DXT1
+#endif
             glBindTexture(GL_TEXTURE_2D, 0);
             Render(window, shader, vao, tex_id);
 
@@ -308,6 +321,12 @@ void GetPixelLocations(int rank, jsvar& config, uint32_t global_width, uint32_t 
     {
         local_render_offset[1] = 0;
     }
+#ifndef STREAM_RGBA
+    local_px_size[0] -= local_px_size[0] % 4;
+    local_px_size[1] -= local_px_size[1] % 4;
+    local_px_offset[0] -= local_px_offset[0] % 4;
+    local_px_offset[1] -= local_px_offset[1] % 4;
+#endif
 }
 
 void Init(int rank, GLFWwindow *window, Screen &screen, int32_t *local_px_size, int32_t *local_render_size, int32_t *local_render_offset, uint8_t *texture, GShaderProgram *shader, GLuint *vao, GLuint *tex_id)
@@ -339,13 +358,22 @@ void Init(int rank, GLFWwindow *window, Screen &screen, int32_t *local_px_size, 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, local_px_size[0], local_px_size[1], 0, GL_RGBA, GL_UNSIGNED_BYTE, texture); //RGBA
+#ifdef STREAM_RGBA
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, local_px_size[0], local_px_size[1], 0, GL_RGBA, GL_UNSIGNED_BYTE, texture); // RGBA
+#else
     glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGB_S3TC_DXT1_EXT, local_px_size[0], local_px_size[1], 0, local_px_size[0] * local_px_size[1] / 2, texture); //DXT1
+#endif
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    mat_projection = glm::ortho(0.0, (double)screen.width, (double)screen.height, 0.0, 1.0, -1.0);
+#ifdef STREAM_RGBA
+    mat_projection = glm::ortho(0.0, (double)screen.width, (double)screen.height, 0.0, 1.0, -1.0); // RGBA
+#else
+    mat_projection = glm::ortho(0.0, (double)screen.width, 0.0, (double)screen.height, 1.0, -1.0); // DXT1
+#endif
     mat_modelview = glm::translate(glm::mat4(1.0), glm::vec3(local_render_offset[0], local_render_offset[1], 0.0));
     mat_modelview = glm::scale(mat_modelview, glm::vec3(local_render_size[0], local_render_size[1], 1.0));
+
+    printf("[rank %d] %d %d, %dx%d\n", rank, local_render_offset[0], local_render_offset[1], local_render_size[0], local_render_size[1]);
 
     Render(window, *shader, *vao, *tex_id);
 }
