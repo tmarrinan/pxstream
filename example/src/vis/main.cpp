@@ -19,7 +19,7 @@
 #define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT  0x83F3
 #endif
 
-#define STREAM_RGBA
+//#define STREAM_RGBA
 
 typedef struct Screen {
     int width;
@@ -367,13 +367,14 @@ void Init(int rank, GLFWwindow *window, Screen &screen, int32_t *local_px_size, 
 
 #ifdef STREAM_RGBA
     mat_projection = glm::ortho(0.0, (double)screen.width, (double)screen.height, 0.0, 1.0, -1.0); // RGBA
+    mat_modelview = glm::translate(glm::mat4(1.0), glm::vec3(local_render_offset[0], local_render_offset[1], 0.0));
+    printf("[rank %d] %d %d, %dx%d\n", rank, local_render_offset[0], local_render_offset[1], local_render_size[0], local_render_size[1]);
 #else
     mat_projection = glm::ortho(0.0, (double)screen.width, 0.0, (double)screen.height, 1.0, -1.0); // DXT1
+    mat_modelview = glm::translate(glm::mat4(1.0), glm::vec3(local_render_offset[0], screen.height - local_render_size[1] - local_render_offset[1], 0.0));
+    printf("[rank %d] %d %d, %dx%d\n", rank, local_render_offset[0], screen.height - local_render_size[1] - local_render_offset[1], local_render_size[0], local_render_size[1]);
 #endif
-    mat_modelview = glm::translate(glm::mat4(1.0), glm::vec3(local_render_offset[0], local_render_offset[1], 0.0));
     mat_modelview = glm::scale(mat_modelview, glm::vec3(local_render_size[0], local_render_size[1], 1.0));
-
-    printf("[rank %d] %d %d, %dx%d\n", rank, local_render_offset[0], local_render_offset[1], local_render_size[0], local_render_size[1]);
 
     Render(window, *shader, *vao, *tex_id);
 }
