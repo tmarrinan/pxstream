@@ -144,11 +144,11 @@ int main(int argc, char **argv)
 
     // initialize PxStream
     uint16_t port_min = 8000;
-    uint16_t port_max = 8008;
+    uint16_t port_max = 8015;
     uint32_t global_width = w * cols;
     uint32_t global_height = h * rows;
     if (rank == 0) printf("[ImageStream] Image load complete (%dx%d)\n", global_width, global_height);
-    PxStream::Server stream("lo0", port_min, port_max, MPI_COMM_WORLD);
+    PxStream::Server stream("lo", port_min, port_max, MPI_COMM_WORLD);
     if (type == IMAGE_SEQUENCE)
     {
         stream.SetImageFormat(PxStream::PixelFormat::RGBA, PxStream::PixelDataType::Uint8);

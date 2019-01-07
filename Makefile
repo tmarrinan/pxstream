@@ -5,7 +5,7 @@ LIBCXX= ar
 LIBCXX_FLAGS= rcs
 
 NETSOCKET_DIR= $(HOME)/local
-OPENSSL_DIR=/usr/local/opt/openssl
+OPENSSL_DIR=/usr
 DDR_DIR= $(HOME)/Dev/ddr
 
 # PX STREAM LIBRARY

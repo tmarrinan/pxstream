@@ -65,7 +65,7 @@ int main(int argc, char **argv)
 
 
     // read config file
-    jsvar config = jsobject::parseFromFile("example/resrc/config/laptop4-cfg.json");
+    jsvar config = jsobject::parseFromFile("example/resrc/config/gliese6-cfg.json");
     if (num_ranks != config["screen"]["displays"].length())
     {
         fprintf(stderr, "Error: app configured for %d ranks\n", config["screen"]["displays"].length());
@@ -132,6 +132,24 @@ int main(int argc, char **argv)
             }
         }
     }
+    
+    //if (rank == 0)
+    {
+        for (i = 0; i < count; i++)
+	{
+	    glfwGetMonitorPos(monitors[i], &xpos1, &ypos1);
+	    printf("[rank %d] Monitor %d: %d %d\n", rank, i, xpos1, ypos1);
+	}
+    }
+    
+    bool fullscreen = false;
+    if (display["location"].hasProperty("fullscreen"))
+    {
+        if (display["location"]["fullscreen"])
+	{
+	    fullscreen = true;
+	}
+    }
 
     // define screen properties
     Screen screen;
@@ -146,17 +164,26 @@ int main(int argc, char **argv)
     strcpy(screen.title, (std::string("PxStream Vis: ") + std::to_string(rank)).c_str());
 
     // create a window and its OpenGL context
+    GLFWwindow *window;
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
-    GLFWwindow *window = glfwCreateWindow(screen.width, screen.height, screen.title, NULL, NULL);
-    glfwGetMonitorPos(monitors[screen.monitor], &xpos1, &ypos1);
-    glfwSetWindowPos(window, xpos1 + (int)display["location"]["x"], ypos1 + (int)display["location"]["y"]);
-    glfwShowWindow(window);
+    if (fullscreen)
+    {
+        glfwWindowHint(GLFW_AUTO_ICONIFY, GLFW_FALSE);
+        window = glfwCreateWindow(screen.width, screen.height, screen.title, monitors[screen.monitor], NULL); 
+    }
+    else
+    {
+        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+        window = glfwCreateWindow(screen.width, screen.height, screen.title, NULL, NULL);
+        glfwGetMonitorPos(monitors[screen.monitor], &xpos1, &ypos1);
+        glfwSetWindowPos(window, xpos1 + (int)display["location"]["x"], ypos1 + (int)display["location"]["y"]);
+        glfwShowWindow(window);
+    }
 
     // make window's context current
     glfwMakeContextCurrent(window);
@@ -169,7 +196,7 @@ int main(int argc, char **argv)
     }
 
 
-    // main event loop
+    // initialize app
     GShaderProgram shader;
     GLuint vao;
     GLuint tex_id;
@@ -177,7 +204,17 @@ int main(int argc, char **argv)
     glfwPollEvents();
 
     MPI_Barrier(MPI_COMM_WORLD);
+    
+    if (display["location"].hasProperty("maindisplay"))
+    {
+        if (display["location"]["maindisplay"])
+	{
+	    glfwFocusWindow(window);
+	}
+    }
 
+    
+    // main event loop
     bool stream_done = false;
     int num_frames = 0;
     uint64_t start = GetCurrentTime();
