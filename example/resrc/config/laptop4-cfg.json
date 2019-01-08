@@ -1,54 +1,57 @@
-// laptop configuration with 2 windows
+// laptop configuration with 4 windows
 {
-    name: "laptop2",
+    name: "laptop4",
+    machine: {
+        singlepc: true
+    },
     screen: {
         resolution: {
             width: 1600,
-            height: 896
+            height: 448
         },
         displays: [
             {
                 x: 0,
                 y: 0,
                 width: 1600,
-                height: 224,
+                height: 112,
                 location: {
                     monitor: 0,
                     x: 0,
-                    y: 0
+                    y: 100
+                }
+            },
+            {
+                x: 0,
+                y: 112,
+                width: 1600,
+                height: 112,
+                location: {
+                    monitor: 0,
+                    x: 0,
+                    y: 212
                 }
             },
             {
                 x: 0,
                 y: 224,
                 width: 1600,
-                height: 224,
+                height: 112,
                 location: {
                     monitor: 0,
                     x: 0,
-                    y: 224
+                    y: 324
                 }
             },
             {
                 x: 0,
-                y: 448,
+                y: 336,
                 width: 1600,
-                height: 224,
+                height: 112,
                 location: {
                     monitor: 0,
                     x: 0,
-                    y: 448
-                }
-            },
-            {
-                x: 0,
-                y: 672,
-                width: 1600,
-                height: 224,
-                location: {
-                    monitor: 0,
-                    x: 0,
-                    y: 672
+                    y: 436
                 }
             }
         ]

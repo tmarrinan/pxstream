@@ -65,7 +65,7 @@ int main(int argc, char **argv)
 
 
     // read config file
-    jsvar config = jsobject::parseFromFile("example/resrc/config/gliese6-cfg.json");
+    jsvar config = jsobject::parseFromFile("example/resrc/config/laptop4-cfg.json");
     if (num_ranks != config["screen"]["displays"].length())
     {
         fprintf(stderr, "Error: app configured for %d ranks\n", config["screen"]["displays"].length());
@@ -76,6 +76,7 @@ int main(int argc, char **argv)
     {
         setenv("DISPLAY", ((std::string)(display["location"]["xdisplay"])).c_str(), true);
     }
+    printf("[rank %d] start\n", rank);
 
 
     // PxStream clients
@@ -133,22 +134,13 @@ int main(int argc, char **argv)
         }
     }
     
-    //if (rank == 0)
-    {
-        for (i = 0; i < count; i++)
-	{
-	    glfwGetMonitorPos(monitors[i], &xpos1, &ypos1);
-	    printf("[rank %d] Monitor %d: %d %d\n", rank, i, xpos1, ypos1);
-	}
-    }
-    
     bool fullscreen = false;
     if (display["location"].hasProperty("fullscreen"))
     {
         if (display["location"]["fullscreen"])
-	{
-	    fullscreen = true;
-	}
+        {
+            fullscreen = true;
+        }
     }
 
     // define screen properties
@@ -179,8 +171,10 @@ int main(int argc, char **argv)
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
         glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
-        window = glfwCreateWindow(screen.width, screen.height, screen.title, NULL, NULL);
+        window = glfwCreateWindow(screen.width-1, screen.height-1, screen.title, NULL, NULL);
+        glfwPollEvents();
         glfwGetMonitorPos(monitors[screen.monitor], &xpos1, &ypos1);
+        glfwSetWindowSize(window, screen.width, screen.height);
         glfwSetWindowPos(window, xpos1 + (int)display["location"]["x"], ypos1 + (int)display["location"]["y"]);
         glfwShowWindow(window);
     }
@@ -253,6 +247,8 @@ int main(int argc, char **argv)
                 }
                 fps_start = GetCurrentTime();
             }
+
+            usleep(200000);
 
             if (stream.ServerFinished())
             {
@@ -402,14 +398,15 @@ void Init(int rank, GLFWwindow *window, Screen &screen, int32_t *local_px_size, 
 #endif
     glBindTexture(GL_TEXTURE_2D, 0);
 
+
 #ifdef STREAM_RGBA
     mat_projection = glm::ortho(0.0, (double)screen.width, (double)screen.height, 0.0, 1.0, -1.0); // RGBA
     mat_modelview = glm::translate(glm::mat4(1.0), glm::vec3(local_render_offset[0], local_render_offset[1], 0.0));
-    printf("[rank %d] %d %d, %dx%d\n", rank, local_render_offset[0], local_render_offset[1], local_render_size[0], local_render_size[1]);
+    printf("[rank %d] render: %d %d, %dx%d\n", rank, local_render_offset[0], local_render_offset[1], local_render_size[0], local_render_size[1]);
 #else
     mat_projection = glm::ortho(0.0, (double)screen.width, 0.0, (double)screen.height, 1.0, -1.0); // DXT1
     mat_modelview = glm::translate(glm::mat4(1.0), glm::vec3(local_render_offset[0], screen.height - local_render_size[1] - local_render_offset[1], 0.0));
-    printf("[rank %d] %d %d, %dx%d\n", rank, local_render_offset[0], screen.height - local_render_size[1] - local_render_offset[1], local_render_size[0], local_render_size[1]);
+    printf("[rank %d] render: %d %d, %dx%d\n", rank, local_render_offset[0], screen.height - local_render_size[1] - local_render_offset[1], local_render_size[0], local_render_size[1]);
 #endif
     mat_modelview = glm::scale(mat_modelview, glm::vec3(local_render_size[0], local_render_size[1], 1.0));
 

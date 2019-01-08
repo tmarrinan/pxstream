@@ -298,6 +298,7 @@ DDR_DataDescriptor* PxStream::Client::CreateGlobalPixelSelection(int32_t *sizes,
                 offsets_own[i * 2 + 1] = (_global_height - _connections[i].local_offset_y - _connections[i].local_height) / 4; //_connections[i].local_offset_y / 4;
                 break;
         }
+        printf("[rank %d] own: offset = %d %d, dim = %d x %d\n", _rank, offsets_own[i * 2 + 0], offsets_own[i * 2 + 1], dims_own[i * 2 + 0], dims_own[i * 2 + 1]);
     }
     int32_t px_sizes[2];
     int32_t px_offsets[2];
@@ -325,6 +326,8 @@ DDR_DataDescriptor* PxStream::Client::CreateGlobalPixelSelection(int32_t *sizes,
             break;
     }
 
+    printf("[rank %d] need: offset = %d %d, dim = %d x %d\n", _rank, px_offsets[0], px_offsets[1], px_sizes[0], px_sizes[1]);
+
     DDR_SetupDataMapping(_rank, _num_ranks, chunks_own, dims_own, offsets_own, px_sizes, px_offsets, desc);
 
     return desc;
@@ -332,8 +335,8 @@ DDR_DataDescriptor* PxStream::Client::CreateGlobalPixelSelection(int32_t *sizes,
 
 void PxStream::Client::FillSelection(DDR_DataDescriptor *selection, void *data)
 {
-    //DDR_ReorganizeData(_num_ranks, _connection_pixel_list[1 - _back_buffer], data, selection);
-    int i, j, idx;
+    DDR_ReorganizeData(_num_ranks, _connection_pixel_list[1 - _back_buffer], data, selection);
+    /*int i, j, idx;
     MPI_Request *send_requests = new MPI_Request[selection->maxSendChunks * _num_ranks];
     MPI_Request *recv_requests = new MPI_Request[selection->maxSendChunks * _num_ranks];
     for (i = 0; i < selection->maxSendChunks; i++)
@@ -383,7 +386,7 @@ void PxStream::Client::FillSelection(DDR_DataDescriptor *selection, void *data)
                 }
             }
         }
-    }
+    }*/
 }
 
 
