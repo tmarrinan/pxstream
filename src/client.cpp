@@ -32,6 +32,7 @@ PxStream::Client::Client(const char *host, uint16_t port, MPI_Comm comm) :
     int i;
     NetSocket::ClientOptions options = NetSocket::CreateClientOptions();
     options.secure = false;
+    options.flags = NetSocket::GeneralFlags::TcpNoDelay;
     uint8_t *remote_ip_addresses;
     uint16_t *remote_ports;
     if (_rank == 0)

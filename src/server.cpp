@@ -24,7 +24,7 @@ PxStream::Server::Server(const char *iface, uint16_t port_min, uint16_t port_max
 
     // Initialize NetSocket server options 
     NetSocket::ServerOptions options = NetSocket::CreateServerOptions();
-
+    options.flags = NetSocket::GeneralFlags::TcpNoDelay;
     // Pick a random open port between `port_min` and `port_max`
     int i;
     int num_ports = port_max - port_min + 1;
