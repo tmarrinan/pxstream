@@ -5,6 +5,8 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 #include <mpi.h>
 extern "C" {
 #include <ddr.h>
@@ -48,12 +50,16 @@ private:
     std::condition_variable _finished_condition;
     uint32_t _read_finished_count;
 
+    int _shmid;
+    uint8_t *_shmem;
+
     void ConnectionRead(int connection_idx);
 
 public:
     Client(const char *host, uint16_t port, MPI_Comm comm);
     ~Client();
 
+    void Init(int argc, char **argv);
     void Read();
     bool ServerFinished();
     void GetGlobalDimensions(uint32_t *width, uint32_t *height);

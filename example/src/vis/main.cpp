@@ -209,18 +209,39 @@ int main(int argc, char **argv)
 
     
     // main event loop
+    bool first_frame = true;
     bool stream_done = false;
     int num_frames = 0;
-    uint64_t start = GetCurrentTime();
-    uint64_t fps_start = start;
+    double start = MPI_Wtime();
+    double fps_start = start;
+    double redist_time = 0.0;
+    double read_time = 0.0;
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
 
         if (!stream_done)
         {
+            double read_start = MPI_Wtime();
             stream.Read();
+            double read_elapsed = MPI_Wtime() - read_start;
+            double read_max_time;
+            MPI_Reduce(&read_elapsed, &read_max_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+            if (rank == 0)
+            {
+                if (!first_frame) read_time += read_max_time;
+            }
+
+            MPI_Barrier(MPI_COMM_WORLD);
+            double redist_start = MPI_Wtime();
             stream.FillSelection(selection, texture);
+            double redist_elapsed = MPI_Wtime() - redist_start;
+            double redist_max_time;
+            MPI_Reduce(&redist_elapsed, &redist_max_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+            if (rank == 0)
+            {
+                redist_time += redist_max_time;
+            }
 
             glBindTexture(GL_TEXTURE_2D, tex_id);
 #ifdef STREAM_RGBA
@@ -233,8 +254,8 @@ int main(int argc, char **argv)
 
             if (num_frames % 12 == 11)
             {
-                uint64_t fps_end = GetCurrentTime();
-                double elapsed_time[2] = {(double)(fps_end - fps_start) / 1000.0, (double)(fps_end - start) / 1000.0};
+                double fps_end = MPI_Wtime();
+                double elapsed_time[2] = {fps_end - fps_start, fps_end - start};
                 double max_elapsed[2];
                 MPI_Reduce(elapsed_time, max_elapsed, 2, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
                 if (rank == 0)
@@ -245,10 +266,10 @@ int main(int argc, char **argv)
                     double overall_mbps = ((double)((uint64_t)total_size * 8ULL * (uint64_t)(num_frames+1)) / (1024.0 * 1024.0)) / max_elapsed[1];
                     printf("[PxVis] last 12 frames: %.3lf fps / %.3lf mbps, overall (all %d frames): %.3lf fps / %.3lf mbps\n", recent_fps, recent_mbps, num_frames + 1, overall_fps, overall_mbps);
                 }
-                fps_start = GetCurrentTime();
+                fps_start = MPI_Wtime();
             }
 
-            usleep(200000);
+            //usleep(200000);
 
             if (stream.ServerFinished())
             {
@@ -257,17 +278,18 @@ int main(int argc, char **argv)
             }
             num_frames++;
         }
+        first_frame = false;
     }
 
-    uint64_t end = GetCurrentTime();
-    double elapsed = (double)(end - start) / 1000.0;
+    double elapsed = MPI_Wtime() - start;
     double max_time;
     MPI_Reduce(&elapsed, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     if (rank == 0)
     {
         uint64_t overall_data = (uint64_t)total_size * 8LL * (uint64_t)num_frames;//4LL * 8LL * 26LL;
-        double speed = (double)overall_data / elapsed;
-        printf("[PxVis] finished - received %d frames in %.3lf secs (%.3lf Mbps)\n", num_frames, elapsed, speed / (1024.0 * 1024.0));
+        double speed = (double)overall_data / max_time;
+        printf("[PxVis] finished - received %d frames in %.3lf secs (%.3lf Mbps)\n", num_frames, max_time, speed / (1024.0 * 1024.0));
+        printf("[PxVis] redistribution time: %.3lf sec (%.3lf sec per frame)\n", redist_time, redist_time / (double)num_frames);
     }
 
     
