@@ -24,6 +24,7 @@
 typedef struct Screen {
     int width;
     int height;
+    bool flip_y;
     int monitor;
     char title[96];
 } Screen;
@@ -34,8 +35,8 @@ typedef struct GShaderProgram {
     GLint img_uniform;
 } GShaderProgram;
 
-void GetPixelLocations(int rank, jsvar& config, uint32_t global_width, uint32_t global_height, int32_t *local_px_size, int32_t *local_px_offset, int32_t *local_render_size, int32_t *local_render_offset);
-void Init(int rank, GLFWwindow *window, Screen &screen, int32_t *local_px_size, int32_t *local_render_size, int32_t *local_render_offset, uint8_t *texture, GShaderProgram *shader, GLuint *vao, GLuint *tex_id);
+void GetPixelLocations(int rank, jsvar& config, uint32_t global_width, uint32_t global_height, int32_t *local_px_size, int32_t *local_px_offset, int32_t *local_render_size, int32_t *local_render_offset, PxStream::PixelFormat px_format);
+void Init(int rank, GLFWwindow *window, Screen &screen, int32_t *local_px_size, int32_t *local_render_size, int32_t *local_render_offset, uint8_t *texture, GShaderProgram *shader, GLuint *vao, GLuint *tex_id, PxStream::PixelFormat px_format);
 void Render(GLFWwindow *window, GShaderProgram& shader, GLuint vao, GLuint tex_id);
 GLuint CreateRectangleVao();
 GShaderProgram CreateTextureShader();
@@ -89,23 +90,34 @@ int main(int argc, char **argv)
 
     uint32_t global_width, global_height;
     stream.GetGlobalDimensions(&global_width, &global_height);
+    PxStream::PixelFormat px_format = stream.GetPixelFormat();
+    if (rank == 0 && px_format == PxStream::PixelFormat::RGBA) {
+        printf("Receiving RGBA Image Stream\n");
+    }
+    else if (rank == 0) { // DXT1
+        printf("Receiving DXT1 Image Stream\n");
+    }
 
     int32_t local_px_size[2];
     int32_t local_px_offset[2];
     int32_t local_render_size[2];
     int32_t local_render_offset[2];
-    GetPixelLocations(rank, config, global_width, global_height, local_px_size, local_px_offset, local_render_size, local_render_offset);
+    GetPixelLocations(rank, config, global_width, global_height, local_px_size, local_px_offset, local_render_size, local_render_offset, px_format);
     DDR_DataDescriptor *selection = stream.CreateGlobalPixelSelection(local_px_size, local_px_offset);
 
     printf("[rank %d] %d %d, %dx%d\n", rank, local_px_offset[0], local_px_offset[1], local_px_size[0], local_px_size[1]);
 
-#ifdef STREAM_RGBA
-    uint32_t total_size = global_width * global_height * 4; // RGBA
-    uint32_t img_size = local_px_size[0] * local_px_size[1] * 4; // RGBA
-#else
-    uint32_t total_size = global_width * global_height / 2; // DXT1
-    uint32_t img_size = local_px_size[0] * local_px_size[1] / 2; // DXT1
-#endif
+    uint32_t total_size;
+    uint32_t img_size;
+    if (px_format == PxStream::PixelFormat::RGBA) {
+        total_size = global_width * global_height * 4; // RGBA
+        img_size = local_px_size[0] * local_px_size[1] * 4; // RGBA
+    }
+    else { // DXT1
+        total_size = global_width * global_height / 2; // DXT1
+        img_size = local_px_size[0] * local_px_size[1] / 2; // DXT1
+    }
+
     uint8_t *texture = new uint8_t[img_size];
     memset(texture, 0, img_size);
 
@@ -147,6 +159,11 @@ int main(int argc, char **argv)
     Screen screen;
     screen.width = display["width"];
     screen.height = display["height"];
+    screen.flip_y = false;
+    if (argc >= 4 && strcmp(argv[3], "0") != 0)
+    {
+        screen.flip_y = true;
+    }
     screen.monitor = display["location"]["monitor"];
     if (screen.monitor < 0 || screen.monitor >= count)
     {
@@ -194,7 +211,7 @@ int main(int argc, char **argv)
     GShaderProgram shader;
     GLuint vao;
     GLuint tex_id;
-    Init(rank, window, screen, local_px_size, local_render_size, local_render_offset, texture, &shader, &vao, &tex_id);
+    Init(rank, window, screen, local_px_size, local_render_size, local_render_offset, texture, &shader, &vao, &tex_id, px_format);
     glfwPollEvents();
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -244,11 +261,13 @@ int main(int argc, char **argv)
             }
 
             glBindTexture(GL_TEXTURE_2D, tex_id);
-#ifdef STREAM_RGBA
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, local_px_size[0], local_px_size[1], GL_RGBA, GL_UNSIGNED_BYTE, texture); // RGBA
-#else
-            glCompressedTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, local_px_size[0], local_px_size[1], GL_COMPRESSED_RGB_S3TC_DXT1_EXT, local_px_size[0] * local_px_size[1] / 2, texture); // DXT1
-#endif
+
+            if (px_format == PxStream::PixelFormat::RGBA) {
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, local_px_size[0], local_px_size[1], GL_RGBA, GL_UNSIGNED_BYTE, texture); // RGBA
+            }
+            else { // DXT1
+                glCompressedTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, local_px_size[0], local_px_size[1], GL_COMPRESSED_RGB_S3TC_DXT1_EXT, local_px_size[0] * local_px_size[1] / 2, texture); // DXT1
+            }
             glBindTexture(GL_TEXTURE_2D, 0);
             Render(window, shader, vao, tex_id);
 
@@ -292,6 +311,8 @@ int main(int argc, char **argv)
         printf("[PxVis] redistribution time: %.3lf sec (%.3lf sec per frame)\n", redist_time, redist_time / (double)num_frames);
     }
 
+    sleep(10);
+
     
     // finalize
     glfwDestroyWindow(window);
@@ -301,7 +322,7 @@ int main(int argc, char **argv)
     return 0;
 }
 
-void GetPixelLocations(int rank, jsvar& config, uint32_t global_width, uint32_t global_height, int32_t *local_px_size, int32_t *local_px_offset, int32_t *local_render_size, int32_t *local_render_offset)
+void GetPixelLocations(int rank, jsvar& config, uint32_t global_width, uint32_t global_height, int32_t *local_px_size, int32_t *local_px_offset, int32_t *local_render_size, int32_t *local_render_offset, PxStream::PixelFormat px_format)
 {
     jsvar display = config["screen"]["displays"][rank];
     double px_aspect = (double)global_width / (double)global_height;
@@ -376,15 +397,16 @@ void GetPixelLocations(int rank, jsvar& config, uint32_t global_width, uint32_t 
     {
         local_render_offset[1] = 0;
     }
-#ifndef STREAM_RGBA
-    local_px_size[0] -= local_px_size[0] % 4;
-    local_px_size[1] -= local_px_size[1] % 4;
-    local_px_offset[0] -= local_px_offset[0] % 4;
-    local_px_offset[1] -= local_px_offset[1] % 4;
-#endif
+
+    if (px_format == PxStream::PixelFormat::RGBA) {
+        local_px_size[0] -= local_px_size[0] % 4;
+        local_px_size[1] -= local_px_size[1] % 4;
+        local_px_offset[0] -= local_px_offset[0] % 4;
+        local_px_offset[1] -= local_px_offset[1] % 4;
+    }
 }
 
-void Init(int rank, GLFWwindow *window, Screen &screen, int32_t *local_px_size, int32_t *local_render_size, int32_t *local_render_offset, uint8_t *texture, GShaderProgram *shader, GLuint *vao, GLuint *tex_id)
+void Init(int rank, GLFWwindow *window, Screen &screen, int32_t *local_px_size, int32_t *local_render_size, int32_t *local_render_offset, uint8_t *texture, GShaderProgram *shader, GLuint *vao, GLuint *tex_id, PxStream::PixelFormat px_format)
 {
     /*
     // print supported extensions
@@ -413,23 +435,35 @@ void Init(int rank, GLFWwindow *window, Screen &screen, int32_t *local_px_size, 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-#ifdef STREAM_RGBA
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, local_px_size[0], local_px_size[1], 0, GL_RGBA, GL_UNSIGNED_BYTE, texture); // RGBA
-#else
-    glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGB_S3TC_DXT1_EXT, local_px_size[0], local_px_size[1], 0, local_px_size[0] * local_px_size[1] / 2, texture); //DXT1
-#endif
+
+    if (px_format == PxStream::PixelFormat::RGBA) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, local_px_size[0], local_px_size[1], 0, GL_RGBA, GL_UNSIGNED_BYTE, texture); // RGBA
+    }
+    else { // DXT1
+        glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGB_S3TC_DXT1_EXT, local_px_size[0], local_px_size[1], 0, local_px_size[0] * local_px_size[1] / 2, texture); //DXT1
+    }
+
     glBindTexture(GL_TEXTURE_2D, 0);
 
+    double bottom = (double)screen.height;
+    double top = 0.0;
+    if (screen.flip_y)
+    {
+        bottom = 0.0;
+        top = (double)screen.height;
+    }
 
-#ifdef STREAM_RGBA
-    mat_projection = glm::ortho(0.0, (double)screen.width, (double)screen.height, 0.0, 1.0, -1.0); // RGBA
-    mat_modelview = glm::translate(glm::mat4(1.0), glm::vec3(local_render_offset[0], local_render_offset[1], 0.0));
-    printf("[rank %d] render: %d %d, %dx%d\n", rank, local_render_offset[0], local_render_offset[1], local_render_size[0], local_render_size[1]);
-#else
-    mat_projection = glm::ortho(0.0, (double)screen.width, 0.0, (double)screen.height, 1.0, -1.0); // DXT1
-    mat_modelview = glm::translate(glm::mat4(1.0), glm::vec3(local_render_offset[0], screen.height - local_render_size[1] - local_render_offset[1], 0.0));
-    printf("[rank %d] render: %d %d, %dx%d\n", rank, local_render_offset[0], screen.height - local_render_size[1] - local_render_offset[1], local_render_size[0], local_render_size[1]);
-#endif
+    if (px_format == PxStream::PixelFormat::RGBA) {
+        mat_projection = glm::ortho(0.0, (double)screen.width, bottom, top, 1.0, -1.0); // RGBA
+        mat_modelview = glm::translate(glm::mat4(1.0), glm::vec3(local_render_offset[0], local_render_offset[1], 0.0));
+        printf("[rank %d] render: %d %d, %dx%d\n", rank, local_render_offset[0], local_render_offset[1], local_render_size[0], local_render_size[1]);
+    }
+    else { // DXT1
+        mat_projection = glm::ortho(0.0, (double)screen.width, bottom, top, 1.0, -1.0); // DXT1
+        mat_modelview = glm::translate(glm::mat4(1.0), glm::vec3(local_render_offset[0], screen.height - local_render_size[1] - local_render_offset[1], 0.0));
+        printf("[rank %d] render: %d %d, %dx%d\n", rank, local_render_offset[0], screen.height - local_render_size[1] - local_render_offset[1], local_render_size[0], local_render_size[1]);
+    }
+
     mat_modelview = glm::scale(mat_modelview, glm::vec3(local_render_size[0], local_render_size[1], 1.0));
 
     Render(window, *shader, *vao, *tex_id);

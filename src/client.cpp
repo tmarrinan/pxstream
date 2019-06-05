@@ -33,8 +33,8 @@ PxStream::Client::Client(const char *host, uint16_t port, MPI_Comm comm) :
     NetSocket::ClientOptions options = NetSocket::CreateClientOptions();
     options.secure = false;
     options.flags = NetSocket::GeneralFlags::TcpNoDelay;
-    options.send_buf_size =  262144;
-    options.recv_buf_size = 2097152;//16777216;
+    //options.send_buf_size =  262144;
+    //options.recv_buf_size = 2097152;//16777216;
     uint8_t *remote_ip_addresses;
     uint16_t *remote_ports;
     if (_rank == 0)
@@ -230,6 +230,16 @@ void PxStream::Client::GetGlobalDimensions(uint32_t *width, uint32_t *height)
 {
     *width = _global_width;
     *height = _global_height;
+}
+
+PxStream::PixelFormat PxStream::Client::GetPixelFormat()
+{
+    return _px_format;
+}
+
+PxStream::PixelDataType PxStream::Client::GetPixelDataType()
+{
+    return _px_data_type;
 }
 
 DDR_DataDescriptor* PxStream::Client::CreateGlobalPixelSelection(int32_t *sizes, int32_t *offsets)
@@ -432,7 +442,7 @@ void PxStream::Client::ConnectionRead(int connection_idx)
                     _finished++;
                     conn_finished = true;
                     read_finished = true;
-                    _connections[connection_idx].client->Send(&frame_received_flag, 1, NetSocket::CopyMode::MemCopy);
+                    //_connections[connection_idx].client->Send(&frame_received_flag, 1, NetSocket::CopyMode::MemCopy);
                 }
                 else {
                     fprintf(stderr, "PxStream::Client> Warning: received unknown buffer\n");
@@ -447,7 +457,7 @@ void PxStream::Client::ConnectionRead(int connection_idx)
                 {
                     fprintf(stderr, "PxStream::Client> Warning: read length (%u) does not match expected pixel length (%u)\n", event.data_length, _connections[connection_idx].pixel_size);
                 }
-                _connections[connection_idx].client->Send(&frame_received_flag, 1, NetSocket::CopyMode::MemCopy);
+                //_connections[connection_idx].client->Send(&frame_received_flag, 1, NetSocket::CopyMode::MemCopy);
                 read_finished = true;
             }
         }

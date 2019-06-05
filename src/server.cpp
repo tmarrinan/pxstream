@@ -25,8 +25,8 @@ PxStream::Server::Server(const char *iface, uint16_t port_min, uint16_t port_max
     // Initialize NetSocket server options 
     NetSocket::ServerOptions options = NetSocket::CreateServerOptions();
     options.flags = NetSocket::GeneralFlags::TcpNoDelay;
-    options.send_buf_size = 2097152;//16777216;
-    options.recv_buf_size =  262144;
+    //options.send_buf_size = 2097152;//16777216;
+    //options.recv_buf_size =  262144;
     // Pick a random open port between `port_min` and `port_max`
     int i;
     int num_ports = port_max - port_min + 1;
@@ -198,14 +198,16 @@ void PxStream::Server::AdvanceToNextFrame()
             {
                 switch (event.type)
                 {
-                    case NetSocket::Server::EventType::ReceiveBinary:
-                        if (_connections[event_client_id].state == ClientState::Streaming
-                            && event.data_length == 1
-                            && reinterpret_cast<uint8_t*>(event.binary_data)[0] == 255)
+                    //case NetSocket::Server::EventType::ReceiveBinary:
+                    //    if (_connections[event_client_id].state == ClientState::Streaming
+                    //        && event.data_length == 1
+                    //        && reinterpret_cast<uint8_t*>(event.binary_data)[0] == 255)
+                    case NetSocket::Server::EventType::SendFinished:
+                        if (event.binary_data == _pixels)
                         {
                             ready_count++;
                         }
-                        delete[] reinterpret_cast<uint8_t*>(event.binary_data);
+                    //    delete[] reinterpret_cast<uint8_t*>(event.binary_data);
                         break;
                     default:
                         break;
